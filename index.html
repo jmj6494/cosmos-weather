@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>COSMOS WEATHER · 실시간 날씨 & 미세먼지</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --accent-1: #38bdf8;
+    --accent-2: #818cf8;
+    --text-color: #e8ecf7;
+    --muted: #9aa4c0;
+    --card-bg: rgba(18, 20, 38, 0.55);
+    --card-border: rgba(255, 255, 255, 0.12);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+    font-family: 'Rubik', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    color: var(--text-color);
+    background: radial-gradient(ellipse at 20% 15%, #1b1240 0%, transparent 55%),
+                radial-gradient(ellipse at 85% 80%, #0e2a4a 0%, transparent 55%),
+                linear-gradient(160deg, #05061a 0%, #0a0d2b 45%, #120a2e 100%);
+    overflow: hidden;
+    position: relative;
+    transition: background 1s ease;
+  }
+
+  /* 날씨별 우주 테마 (accent 색상만 교체, 배경은 항상 우주) */
+  body.clear         { --accent-1: #fbbf24; --accent-2: #f472b6; }
+  body.clouds        { --accent-1: #94a3b8; --accent-2: #64748b; }
+  body.rain          { --accent-1: #22d3ee; --accent-2: #6366f1; }
+  body.drizzle       { --accent-1: #67e8f9; --accent-2: #38bdf8; }
+  body.thunderstorm  { --accent-1: #a855f7; --accent-2: #ec4899; }
+  body.snow          { --accent-1: #e0f2fe; --accent-2: #7dd3fc; }
+  body.mist          { --accent-1: #c4b5fd; --accent-2: #a78bfa; }
+  body.haze          { --accent-1: #a8a29e; --accent-2: #78716c; }
+  body.fog           { --accent-1: #cbd5e1; --accent-2: #94a3b8; }
+  body.smoke         { --accent-1: #9ca3af; --accent-2: #6b7280; }
+
+  /* 별 & 네뷸라 배경 레이어 */
+  #starfield {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .star {
+    position: absolute;
+    background: #fff;
+    border-radius: 50%;
+    opacity: 0.6;
+    animation: twinkle ease-in-out infinite;
+  }
+  @keyframes twinkle {
+    0%, 100% { opacity: 0.15; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.15); }
+  }
+  .nebula {
+    position: fixed;
+    z-index: 0;
+    border-radius: 50%;
+    filter: blur(70px);
+    opacity: 0.35;
+    mix-blend-mode: screen;
+    transition: background 1s ease;
+    pointer-events: none;
+  }
+  .nebula.one { width: 420px; height: 420px; top: -120px; left: -100px; background: var(--accent-2); }
+  .nebula.two { width: 380px; height: 380px; bottom: -140px; right: -100px; background: var(--accent-1); }
+
+  .dashboard {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 480px;
+    background: var(--card-bg);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid var(--card-border);
+    border-radius: 28px;
+    padding: 30px;
+    box-shadow:
+      0 20px 60px rgba(0,0,0,0.55),
+      0 0 40px -10px var(--accent-1);
+    transition: box-shadow 1s ease;
+  }
+
+  .brand {
+    text-align: center;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 12px;
+    letter-spacing: 4px;
+    color: var(--muted);
+    margin-bottom: 18px;
+  }
+
+  .search-box { display: flex; gap: 8px; margin-bottom: 22px; }
+  input {
+    flex: 1;
+    padding: 12px 16px;
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    font-size: 15px;
+    outline: none;
+    background: rgba(255,255,255,0.06);
+    color: var(--text-color);
+    font-family: 'Rubik', sans-serif;
+  }
+  input::placeholder { color: var(--muted); }
+  input:focus { border-color: var(--accent-1); box-shadow: 0 0 0 3px rgba(255,255,255,0.05); }
+  button {
+    padding: 12px 18px;
+    border: none;
+    border-radius: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    color: #0a0d2b;
+    background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+    transition: transform 0.15s ease, box-shadow 0.3s ease;
+  }
+  button:hover { transform: translateY(-1px); box-shadow: 0 6px 18px -4px var(--accent-1); }
+  button:active { transform: translateY(0); }
+
+  .weather-info { text-align: center; margin-top: 6px; }
+  .city-name {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+    background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .weather-icon {
+    font-size: 68px;
+    margin: 8px 0;
+    filter: drop-shadow(0 0 18px var(--accent-1));
+    animation: float 4s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+  }
+  .temp {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 46px;
+    font-weight: 800;
+    margin-bottom: 6px;
+    color: var(--text-color);
+  }
+  .description { font-size: 15px; color: var(--muted); margin-bottom: 26px; }
+
+  .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .card {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--card-border);
+    padding: 14px;
+    border-radius: 16px;
+    text-align: center;
+  }
+  .card-title { font-size: 12px; color: var(--muted); margin-bottom: 6px; letter-spacing: 0.3px; }
+  .card-value { font-size: 18px; font-weight: 700; color: var(--text-color); }
+
+  .badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    margin-top: 6px;
+  }
+  .status-good   { background: rgba(34,197,94,0.18); color: #4ade80; border: 1px solid rgba(74,222,128,0.4); }
+  .status-normal { background: rgba(251,191,36,0.18); color: #fbbf24; border: 1px solid rgba(251,191,36,0.4); }
+  .status-bad    { background: rgba(248,113,113,0.18); color: #f87171; border: 1px solid rgba(248,113,113,0.4); }
+
+  .hourly-section { margin-top: 22px; }
+  .hourly-summary {
+    font-size: 13px;
+    color: var(--text-color);
+    margin-bottom: 12px;
+    line-height: 1.4;
+  }
+  .hourly-scroll {
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+  .hourly-scroll::-webkit-scrollbar { height: 4px; }
+  .hourly-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 4px; }
+  .hourly-inner { position: relative; }
+  .hourly-top-row { display: flex; }
+  .hour-col { flex: 0 0 auto; text-align: center; }
+  .hour-time { font-size: 10.5px; color: var(--muted); margin-bottom: 6px; white-space: nowrap; }
+  .hour-icon { font-size: 20px; margin-bottom: 6px; filter: drop-shadow(0 0 6px var(--accent-1)); }
+  .hour-temp { font-size: 14px; font-weight: 700; color: var(--text-color); }
+  .hourly-pop-wrap { position: relative; margin-top: 6px; }
+  .hour-pop-label {
+    position: absolute;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent-1);
+    transform: translateX(-50%);
+    white-space: nowrap;
+  }
+
+  .forecast-section { margin-top: 22px; }
+  .forecast-title {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-bottom: 10px;
+    letter-spacing: 0.3px;
+    font-weight: 600;
+  }
+  .forecast-row { display: flex; gap: 6px; }
+  .forecast-card {
+    flex: 1;
+    min-width: 0;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 10px 2px;
+    text-align: center;
+  }
+  .forecast-day { font-size: 11px; color: var(--muted); margin-bottom: 4px; font-weight: 700; }
+  .forecast-icon {
+    font-size: 21px;
+    margin-bottom: 4px;
+    filter: drop-shadow(0 0 8px var(--accent-1));
+  }
+  .forecast-temp { font-size: 12.5px; font-weight: 700; color: var(--text-color); margin-bottom: 3px; white-space: nowrap; }
+  .ftemp-min { color: var(--muted); font-weight: 500; }
+  .forecast-pop { font-size: 10px; color: var(--accent-1); font-weight: 600; }
+
+  .error-message { color: #f87171; font-size: 13px; text-align: center; margin-top: 12px; min-height: 16px; }
+</style>
+</head>
+<body>
+
+<div id="starfield"></div>
+<div class="nebula one"></div>
+<div class="nebula two"></div>
+
+<div class="dashboard">
+  <div class="brand">C O S M O S &nbsp;W E A T H E R</div>
+  <div class="search-box">
+    <input type="text" id="cityInput" placeholder="도시명 (예: 서울, Seoul, Tokyo)">
+    <button onclick="getWeather()">검색</button>
+  </div>
+  <div id="content">
+    <div class="weather-info">
+      <div class="city-name" id="city">-</div>
+      <div class="weather-icon" id="icon">🌌</div>
+      <div class="temp" id="temp">--°C</div>
+      <div class="description" id="desc">불러오는 중...</div>
+    </div>
+    <div class="details-grid">
+      <div class="card">
+        <div class="card-title">미세먼지 (PM10)</div>
+        <div class="card-value" id="pm10">-- µg/m³</div>
+        <span class="badge status-good" id="pm10Status">-</span>
+      </div>
+      <div class="card">
+        <div class="card-title">초미세먼지 (PM2.5)</div>
+        <div class="card-value" id="pm25">-- µg/m³</div>
+        <span class="badge status-good" id="pm25Status">-</span>
+      </div>
+      <div class="card">
+        <div class="card-title">습도</div>
+        <div class="card-value" id="humidity">--%</div>
+      </div>
+      <div class="card">
+        <div class="card-title">풍속</div>
+        <div class="card-value" id="wind">-- m/s</div>
+      </div>
+    </div>
+    <div class="hourly-section">
+      <div class="hourly-summary" id="hourlySummary">날씨를 불러오는 중...</div>
+      <div class="hourly-scroll">
+        <div class="hourly-inner" id="hourlyInner">
+          <div class="hourly-top-row" id="hourlyTopRow"></div>
+          <div class="hourly-pop-wrap" id="hourlyPopWrap"></div>
+        </div>
+      </div>
+    </div>
+    <div class="forecast-section">
+      <div class="forecast-title">5일 예보</div>
+      <div class="forecast-row" id="forecastRow"></div>
+    </div>
+  </div>
+  <div class="error-message" id="errorMsg"></div>
+</div>
+
+<script>
+  // OpenWeatherMap API Key를 아래에 입력하세요. (openweathermap.org 에서 무료로 발급)
+  const API_KEY = "";
+
+  const weatherIcons = {
+    Clear: "☀️",
+    Clouds: "☁️",
+    Rain: "🌧️",
+    Drizzle: "🌦️",
+    Thunderstorm: "⚡",
+    Snow: "❄️",
+    Mist: "🌫️",
+    Haze: "🌫️",
+    Fog: "🌁",
+    Smoke: "🌫️"
+  };
+
+  // OpenWeatherMap의 한글 설명(description)은 코드에 따라 "실 비"처럼
+  // 불필요한 띄어쓰기가 섞여 나올 때가 있어서, 날씨 코드(id) 기준으로
+  // 우리가 직접 정리한 깔끔한 한글 표현을 우선 사용합니다.
+  const WEATHER_ID_DESC = {
+    200: "약한 뇌우와 비", 201: "뇌우와 비", 202: "강한 뇌우와 비",
+    210: "약한 뇌우", 211: "뇌우", 212: "강한 뇌우", 221: "불규칙적 뇌우",
+    230: "약한 뇌우와 이슬비", 231: "뇌우와 이슬비", 232: "강한 뇌우와 이슬비",
+    300: "약한 이슬비", 301: "이슬비", 302: "강한 이슬비",
+    310: "약한 이슬비", 311: "이슬비", 312: "강한 이슬비",
+    313: "소나기와 이슬비", 314: "강한 소나기와 이슬비", 321: "소나기성 이슬비",
+    500: "약한 비", 501: "비", 502: "강한 비", 503: "매우 강한 비", 504: "폭우",
+    511: "언 비", 520: "약한 소나기", 521: "소나기", 522: "강한 소나기", 531: "불규칙적 소나기",
+    600: "약한 눈", 601: "눈", 602: "폭설", 611: "진눈깨비",
+    612: "약한 소낙눈깨비", 613: "소낙눈깨비", 615: "약한 비와 눈", 616: "비와 눈",
+    620: "약한 소낙눈", 621: "소낙눈", 622: "강한 소낙눈",
+    701: "박무", 711: "연기", 721: "연무", 731: "먼지", 741: "짙은 안개",
+    751: "모래바람", 761: "먼지바람", 762: "화산재", 771: "돌풍", 781: "토네이도",
+    800: "맑음", 801: "구름 조금", 802: "구름 약간", 803: "구름 많음", 804: "흐림",
+  };
+  const WEATHER_MAIN_DESC = {
+    Thunderstorm: "뇌우", Drizzle: "이슬비", Rain: "비", Snow: "눈",
+    Clear: "맑음", Clouds: "흐림", Mist: "박무", Smoke: "연기",
+    Haze: "연무", Dust: "먼지", Fog: "짙은 안개", Sand: "모래바람",
+    Ash: "화산재", Squall: "돌풍", Tornado: "토네이도",
+  };
+  function getCleanDescription(w) {
+    return WEATHER_ID_DESC[w.id] || WEATHER_MAIN_DESC[w.main] || w.description;
+  }
+
+  // 한글 받침 유무에 따라 "이/가" 조사를 자연스럽게 붙여줍니다.
+  function withSubjectParticle(word) {
+    const last = word.trim().slice(-1);
+    const code = last.charCodeAt(0);
+    const hasFinalConsonant = code >= 0xac00 && code <= 0xd7a3 && (code - 0xac00) % 28 !== 0;
+    return word + (hasFinalConsonant ? "이" : "가");
+  }
+
+  // 한글 도시명 → OpenWeatherMap이 인식하는 영문 도시명 매핑
+  // (OpenWeatherMap의 city 검색은 한글 입력을 안정적으로 지원하지 않아서,
+  //  주요 도시는 여기서 미리 변환해줍니다. 목록에 없는 이름은 입력값 그대로 보냅니다.)
+  const KOREAN_CITY_MAP = {
+    "서울": "Seoul", "부산": "Busan", "인천": "Incheon", "대구": "Daegu",
+    "대전": "Daejeon", "광주": "Gwangju", "울산": "Ulsan", "세종": "Sejong",
+    "수원": "Suwon", "성남": "Seongnam", "고양": "Goyang", "용인": "Yongin",
+    "청주": "Cheongju", "전주": "Jeonju", "천안": "Cheonan", "안산": "Ansan",
+    "안양": "Anyang", "김해": "Gimhae", "포항": "Pohang", "제주": "Jeju",
+    "춘천": "Chuncheon", "강릉": "Gangneung", "여수": "Yeosu", "순천": "Suncheon",
+    "목포": "Mokpo", "창원": "Changwon", "구미": "Gumi", "경주": "Gyeongju",
+    "평택": "Pyeongtaek", "군산": "Gunsan", "속초": "Sokcho", "충주": "Chungju"
+  };
+
+  function resolveCityName(input) {
+    return KOREAN_CITY_MAP[input] || input;
+  }
+
+  // 유닉스 시간(초)을 "브라우저 기준 로컬 날짜" 키로 변환 (날짜 그룹핑용)
+  function localDateKey(unixSeconds) {
+    const d = new Date(unixSeconds * 1000);
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  }
+
+  // ---------- 별(starfield) 생성 ----------
+  function createStars(count) {
+    const field = document.getElementById("starfield");
+    field.innerHTML = "";
+    for (let i = 0; i < count; i++) {
+      const star = document.createElement("div");
+      star.className = "star";
+      const size = (i % 5 === 0) ? 3 : (i % 3 === 0 ? 2 : 1);
+      star.style.width = size + "px";
+      star.style.height = size + "px";
+      star.style.top = ((i * 37) % 100) + "%";
+      star.style.left = ((i * 53) % 100) + "%";
+      star.style.animationDuration = (2 + (i % 5)) + "s";
+      star.style.animationDelay = (i % 10) * 0.3 + "s";
+      field.appendChild(star);
+    }
+  }
+  createStars(90);
+
+  // ---------- 날씨 조회 ----------
+  async function getWeather() {
+    const rawCity = document.getElementById("cityInput").value.trim() || "Seoul";
+    const city = resolveCityName(rawCity);
+    const errorMsg = document.getElementById("errorMsg");
+    errorMsg.innerText = "";
+
+    // API Key가 없을 경우 테스트용 더미 데이터 표시
+    if (!API_KEY) {
+      renderMockData(city);
+      return;
+    }
+
+    try {
+      // 1. 날씨 데이터
+      const weatherRes = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${API_KEY}&units=metric&lang=kr`);
+      if (!weatherRes.ok) throw new Error("도시를 찾을 수 없습니다. (영문 도시명으로 다시 시도해보세요)");
+      const weatherData = await weatherRes.json();
+
+      // 2. 미세먼지 데이터 + 3. 5일 예보 데이터 (위도, 경도 활용, 동시에 요청)
+      const { lat, lon } = weatherData.coord;
+      const [airRes, forecastRes] = await Promise.all([
+        fetch(`https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${API_KEY}`),
+        fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&lang=kr`),
+      ]);
+      if (!airRes.ok) throw new Error("대기질 정보를 가져오지 못했습니다.");
+      const airData = await airRes.json();
+
+      updateUI(weatherData, airData);
+
+      // 예보는 실패해도 현재 날씨 표시를 막지 않도록 별도로 처리
+      if (forecastRes.ok) {
+        const forecastData = await forecastRes.json();
+        renderForecast(buildDailyForecast(forecastData.list));
+
+        const hourly = buildHourlyToday(forecastData.list);
+        renderHourly(hourly);
+        document.getElementById("hourlySummary").innerText = buildHourlySummary(hourly);
+      } else {
+        clearForecast();
+        clearHourly();
+      }
+    } catch (err) {
+      errorMsg.innerText = err.message;
+    }
+  }
+
+  // ---------- 5일 예보 가공 ----------
+  function buildDailyForecast(list) {
+    const days = {};
+    list.forEach((item) => {
+      const key = localDateKey(item.dt);
+      if (!days[key]) days[key] = { dateObj: new Date(item.dt * 1000), temps: [], pops: [], icons: {} };
+      days[key].temps.push(item.main.temp);
+      days[key].pops.push(item.pop || 0);
+      const main = item.weather[0].main;
+      days[key].icons[main] = (days[key].icons[main] || 0) + 1;
+    });
+
+    return Object.values(days)
+      .slice(0, 5)
+      .map((d) => ({
+        dateObj: d.dateObj,
+        max: Math.round(Math.max(...d.temps)),
+        min: Math.round(Math.min(...d.temps)),
+        pop: Math.round(Math.max(...d.pops) * 100),
+        main: Object.entries(d.icons).sort((a, b) => b[1] - a[1])[0][0],
+      }));
+  }
+
+  function renderForecast(days) {
+    const row = document.getElementById("forecastRow");
+    const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+    row.innerHTML = "";
+    days.forEach((d, idx) => {
+      const label = idx === 0 ? "오늘" : weekdays[d.dateObj.getDay()] + "요일";
+      const card = document.createElement("div");
+      card.className = "forecast-card";
+      card.innerHTML = `
+        <div class="forecast-day">${label}</div>
+        <div class="forecast-icon">${weatherIcons[d.main] || "🌤️"}</div>
+        <div class="forecast-temp">${d.max}° <span class="ftemp-min">${d.min}°</span></div>
+        <div class="forecast-pop">☔ ${d.pop}%</div>
+      `;
+      row.appendChild(card);
+    });
+  }
+
+  function clearForecast() {
+    document.getElementById("forecastRow").innerHTML = "";
+  }
+
+  // 데모용 5일 예보 (API 키가 없을 때)
+  function mockForecastDays() {
+    const base = new Date();
+    const conditions = [
+      { max: 25, min: 18, pop: 10, main: "Clear" },
+      { max: 27, min: 19, pop: 20, main: "Clouds" },
+      { max: 23, min: 17, pop: 60, main: "Rain" },
+      { max: 21, min: 16, pop: 40, main: "Clouds" },
+      { max: 26, min: 18, pop: 5, main: "Clear" },
+    ];
+    return conditions.map((c, i) => {
+      const d = new Date(base);
+      d.setDate(base.getDate() + i);
+      return { dateObj: d, ...c };
+    });
+  }
+
+  // ---------- 지금부터 24시간 예보 (3시간 단위) ----------
+  // OpenWeatherMap 무료 예보 API는 3시간 간격 데이터만 제공해서,
+  // "시간별"은 1시간이 아니라 3시간 단위 칸으로 보여줍니다.
+  // (예전엔 "오늘 날짜"에 해당하는 칸만 걸러냈는데, 그러면 자정 근처엔
+  //  남은 칸이 거의 없어서 1개만 보이는 문제가 있었어요. 그래서 그냥
+  //  지금 이후로 순서대로 8칸(=24시간)을 보여주는 방식으로 바꿨습니다.)
+  function buildHourlyToday(list) {
+    return list.slice(0, 8).map((item) => ({
+      time: new Date(item.dt * 1000),
+      temp: Math.round(item.main.temp),
+      pop: Math.round((item.pop || 0) * 100),
+      main: item.weather[0].main,
+      desc: getCleanDescription(item.weather[0]),
+    }));
+  }
+
+  function formatHourLabel(d) {
+    const h = d.getHours();
+    const period = h < 12 ? "오전" : "오후";
+    let h12 = h % 12;
+    if (h12 === 0) h12 = 12;
+    return `${period} ${h12}시`;
+  }
+
+  function buildHourlySummary(hourly) {
+    if (!hourly.length) return "";
+    const maxTemp = Math.max(...hourly.map((h) => h.temp));
+    return `${withSubjectParticle(hourly[0].desc)} 예상됩니다. 최고 기온은 ${maxTemp}°C 입니다.`;
+  }
+
+  function renderHourly(hourly) {
+    const topRow = document.getElementById("hourlyTopRow");
+    const popWrap = document.getElementById("hourlyPopWrap");
+    topRow.innerHTML = "";
+    popWrap.innerHTML = "";
+    if (!hourly.length) return;
+
+    const colWidth = 58;
+    const count = hourly.length;
+    const totalWidth = colWidth * count;
+    document.getElementById("hourlyInner").style.width = totalWidth + "px";
+
+    hourly.forEach((h, i) => {
+      const label = i === 0 ? "지금" : formatHourLabel(h.time);
+      const col = document.createElement("div");
+      col.className = "hour-col";
+      col.style.width = colWidth + "px";
+      col.innerHTML = `
+        <div class="hour-time">${label}</div>
+        <div class="hour-icon">${weatherIcons[h.main] || "🌤️"}</div>
+        <div class="hour-temp">${h.temp}°</div>
+      `;
+      topRow.appendChild(col);
+    });
+
+    // 강수확률 점+선 그래프 (확률이 높을수록 아래로 내려가요)
+    const chartH = 46;
+    const minY = 16, maxY = 40;
+    const pops = hourly.map((h) => h.pop);
+    const maxPop = Math.max(...pops, 1);
+    const minPop = Math.min(...pops, 0);
+    const range = Math.max(maxPop - minPop, 1);
+
+    const points = hourly.map((h, i) => {
+      const x = colWidth * i + colWidth / 2;
+      const t = (h.pop - minPop) / range;
+      const y = minY + t * (maxY - minY);
+      return { x, y, pop: h.pop };
+    });
+
+    popWrap.style.height = chartH + "px";
+
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("width", totalWidth);
+    svg.setAttribute("height", chartH);
+    svg.style.position = "absolute";
+    svg.style.top = "0";
+    svg.style.left = "0";
+
+    const path = document.createElementNS(svgNS, "path");
+    path.setAttribute("d", points.map((p, i) => (i === 0 ? "M" : "L") + p.x + "," + p.y).join(" "));
+    path.setAttribute("fill", "none");
+    path.style.stroke = "var(--accent-1)";
+    path.setAttribute("stroke-width", "2");
+    svg.appendChild(path);
+
+    points.forEach((p) => {
+      const c = document.createElementNS(svgNS, "circle");
+      c.setAttribute("cx", p.x);
+      c.setAttribute("cy", p.y);
+      c.setAttribute("r", "3");
+      c.style.fill = "var(--accent-1)";
+      svg.appendChild(c);
+    });
+
+    popWrap.appendChild(svg);
+
+    points.forEach((p, i) => {
+      const label = document.createElement("div");
+      label.className = "hour-pop-label";
+      label.style.left = p.x + "px";
+      label.style.top = Math.max(p.y - 16, 0) + "px";
+      label.innerText = `💧${hourly[i].pop}%`;
+      popWrap.appendChild(label);
+    });
+  }
+
+  function clearHourly() {
+    document.getElementById("hourlyTopRow").innerHTML = "";
+    document.getElementById("hourlyPopWrap").innerHTML = "";
+    document.getElementById("hourlySummary").innerText = "";
+  }
+
+  // 데모용 시간별 예보 (API 키가 없을 때)
+  function mockHourlyToday() {
+    const now = new Date();
+    const pattern = [
+      { temp: 25, pop: 20, main: "Clouds", desc: "구름 많음" },
+      { temp: 25, pop: 30, main: "Clouds", desc: "흐림" },
+      { temp: 24, pop: 30, main: "Clouds", desc: "흐림" },
+      { temp: 24, pop: 60, main: "Rain", desc: "약한 비" },
+      { temp: 24, pop: 60, main: "Rain", desc: "약한 비" },
+      { temp: 24, pop: 60, main: "Rain", desc: "약한 비" },
+      { temp: 23, pop: 40, main: "Clouds", desc: "흐림" },
+      { temp: 22, pop: 20, main: "Clouds", desc: "구름 많음" },
+    ];
+    return pattern.map((p, i) => {
+      const t = new Date(now);
+      t.setHours(now.getHours() + i * 3, 0, 0, 0);
+      return { time: t, ...p };
+    });
+  }
+
+  function updateUI(weather, air) {
+    const mainWeather = weather.weather[0].main;
+
+    document.body.className = mainWeather.toLowerCase();
+
+    document.getElementById("city").innerText = weather.name;
+    document.getElementById("icon").innerText = weatherIcons[mainWeather] || "🌌";
+    document.getElementById("temp").innerText = `${Math.round(weather.main.temp)}°C`;
+    document.getElementById("desc").innerText = getCleanDescription(weather.weather[0]);
+    document.getElementById("humidity").innerText = `${weather.main.humidity}%`;
+    document.getElementById("wind").innerText = `${weather.wind.speed} m/s`;
+
+    const pm10 = air.list[0].components.pm10;
+    const pm2_5 = air.list[0].components.pm2_5;
+    document.getElementById("pm10").innerText = `${Math.round(pm10)} µg/m³`;
+    document.getElementById("pm25").innerText = `${Math.round(pm2_5)} µg/m³`;
+    setStatusBadge("pm10Status", pm10, 30, 80);
+    setStatusBadge("pm25Status", pm2_5, 15, 35);
+  }
+
+  function setStatusBadge(elementId, value, goodThreshold, normalThreshold) {
+    const badge = document.getElementById(elementId);
+    if (value <= goodThreshold) {
+      badge.innerText = "좋음";
+      badge.className = "badge status-good";
+    } else if (value <= normalThreshold) {
+      badge.innerText = "보통";
+      badge.className = "badge status-normal";
+    } else {
+      badge.innerText = "나쁨";
+      badge.className = "badge status-bad";
+    }
+  }
+
+  // API 키가 없을 때 보여주는 데모 데이터
+  function renderMockData(city) {
+    document.body.className = "clear";
+    document.getElementById("city").innerText = city.toUpperCase();
+    document.getElementById("icon").innerText = "☀️";
+    document.getElementById("temp").innerText = "22°C";
+    document.getElementById("desc").innerText = "맑음 (테스트 모드)";
+    document.getElementById("humidity").innerText = "48%";
+    document.getElementById("wind").innerText = "2.4 m/s";
+    document.getElementById("pm10").innerText = "24 µg/m³";
+    document.getElementById("pm25").innerText = "13 µg/m³";
+    setStatusBadge("pm10Status", 24, 30, 80);
+    setStatusBadge("pm25Status", 13, 15, 35);
+    renderForecast(mockForecastDays());
+
+    const hourly = mockHourlyToday();
+    renderHourly(hourly);
+    document.getElementById("hourlySummary").innerText = buildHourlySummary(hourly);
+  }
+
+  // 첫 화면도 동일한 로직으로 렌더링
+  getWeather();
+</script>
+</body>
+</html>
